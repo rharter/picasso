@@ -15,18 +15,23 @@
  */
 package com.squareup.picasso;
 
-import android.content.Context;
 import android.graphics.Bitmap;
 import android.net.NetworkInfo;
 import android.net.Uri;
-import java.io.IOException;
-import java.io.InputStream;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
+import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
+import org.robolectric.shadows.ShadowApplication;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 
 import static android.graphics.Bitmap.Config.ARGB_8888;
 import static com.squareup.picasso.TestUtils.URI_1;
@@ -42,6 +47,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.MockitoAnnotations.initMocks;
+import static org.robolectric.Robolectric.shadowOf;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
@@ -143,5 +149,34 @@ public class NetworkRequestHandlerTest {
 
     Bitmap actual = customNetworkHandler.load(action.getRequest()).getBitmap();
     assertThat(actual).isSameAs(expected);
+  }
+
+  @Test public void readsBitmapOrientation() throws Exception {
+    final InputStream in = getClass().getResourceAsStream("/ref_orient.jpg");
+    Downloader orientedDownloader = new Downloader() {
+      @Override public Response load(Uri uri, boolean localCacheOnly) throws IOException {
+        return new Response(in, false, in.available());
+      }
+    };
+    Action action = TestUtils.mockAction(URI_KEY_1, URI_1);
+    NetworkRequestHandler customNetworkHandler = new NetworkRequestHandler(orientedDownloader, stats);
+
+    RequestHandler.Result result = customNetworkHandler.load(action.getRequest());
+    assertThat(result.getExifOrientation()).isSameAs(90);
+  }
+
+  @Test public void defaultsBitmapOrientationToNormal() throws Exception {
+      final InputStream in = getClass().getResourceAsStream("/ref_no_orient.jpg");
+      Downloader noOrientDownloader = new Downloader() {
+          @Override
+          public Response load(Uri uri, boolean localCacheOnly) throws IOException {
+              return new Response(in, false, in.available());
+          }
+      };
+      Action action = TestUtils.mockAction(URI_KEY_1, URI_1);
+      NetworkRequestHandler customNetworkHandler = new NetworkRequestHandler(noOrientDownloader, stats);
+
+      RequestHandler.Result result = customNetworkHandler.load(action.getRequest());
+      assertThat(result.getExifOrientation()).isSameAs(0);
   }
 }
